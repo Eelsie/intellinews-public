@@ -280,7 +280,7 @@ if options == "📚 Document Analysis":
             cf1, _, cf2 = st.columns([11, 1, 4])
             with cf1:
                 PROMPT = st.text_area("Prompt:", value="""
-                                    You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. \n\nYour main task is to compare a set of documents relative to the research question specified below. \n\nCompare the documents, find similarities and differences. Justify your insights by providing evidence from the documents in the form: 
+                                    You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. \n\nYour main task is to compare a set of documents relative to the research question specified below. \n\nCompare the documents, find similarities and differences. Use only the provided documents and do not attempt to fabricate an answer. Justify your insights by providing evidence from the documents in the form: 
                                     Source:
                                     Excerpt from the document:
                                     """, height=400, max_chars=10000)
