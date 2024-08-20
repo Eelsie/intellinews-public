@@ -239,7 +239,7 @@ if options == "🏠 Home":
 if options == "📊 The Dataset":
     st.write('___')
     st.write("##### Upload a document to add to the dataset:")
-    pdf = st.file_uploader('Upload PDF files', accept_multiple_files=True, type=['pdf'], label_visibility='hidden')
+    pdf = st.file_uploader('Upload PDF files', type=['pdf'], label_visibility='hidden')
     btn_upload = st.button("Upload")
     if pdf and btn_upload:
         file_path = save_uploadedfile(pdf)
