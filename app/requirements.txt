@@ -1,0 +1,6 @@
+langchain_community==0.2.4
+protobuf==5.27.1
+python-dotenv==1.0.1
+regex==2023.12.25
+st_annotated_text==4.0.1
+streamlit==1.31.1
