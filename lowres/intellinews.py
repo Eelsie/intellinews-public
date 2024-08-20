@@ -10,8 +10,8 @@ import openai
 from openai import OpenAI
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
-import spacy
-import spacy_streamlit
+# import spacy
+# import spacy_streamlit
 from wordcloud import WordCloud
 from sklearn.feature_extraction import text
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -134,14 +134,12 @@ def generate_document_analysis(Q, df, llm):
         """
 
     prompt = f"""
-        You are an unbias investigative jounalist.
-        You are not representing any party or organization and you would treat the documents as research material.
-        Your main task is to compare a set of documents relative to the research question: '{Q}':
-
+        '{PROMPT}'
+        
+        Research question: '{Q}':
+        
         Use the following context to answer the question:
         {doc_input}.
-
-        Compare the documents, find similarities and differences. Answer in Finnish. Justify your insights by providing evidence from the documents.
         """
 
     response = generate_response(task, prompt, llm)
@@ -281,6 +279,7 @@ if options == "📚 Document Analysis":
             QDOCS = []
             cf1, _, cf2 = st.columns([11, 1, 4])
             with cf1:
+                PROMPT = st.text_area("Prompt:", value="You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. \n\nYour main task is to compare a set of documents relative to the research question specified below. \n\nCompare the documents, find similarities and differences. Justify your insights by providing evidence from the documents.", height=400, max_chars=10000)
                 QA = st.text_area("Ask a Question:", placeholder="Type your question here...", height=100, max_chars=5000)
                 _, center, _ = st.columns([5, 1, 5])
                 center.subheader('OR')
@@ -394,5 +393,3 @@ if options == "📚 Document Analysis":
                 st.write(document_analysis.replace('```markdown', '').replace('```', ''))
                 # st.markdown(document_analysis)
                 st.write('___')
-
-
