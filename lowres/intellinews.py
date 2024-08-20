@@ -136,10 +136,10 @@ def generate_document_analysis(Q, df, llm):
     prompt = f"""
         '{PROMPT}'
         
-        Research question: '{Q}':
+        Research question delimited by triple quotes: "/"/"/{Q}"/"/"/:
         
-        Use the following context to answer the question:
-        {doc_input}.
+        To answer the research question, use the following context delimited by triple backticks:
+        ```{doc_input}```.
         """
 
     response = generate_response(task, prompt, llm)
@@ -279,7 +279,11 @@ if options == "📚 Document Analysis":
             QDOCS = []
             cf1, _, cf2 = st.columns([11, 1, 4])
             with cf1:
-                PROMPT = st.text_area("Prompt:", value="You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. \n\nYour main task is to compare a set of documents relative to the research question specified below. \n\nCompare the documents, find similarities and differences. Justify your insights by providing evidence from the documents.", height=400, max_chars=10000)
+                PROMPT = st.text_area("Prompt:", value="""
+                                    You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. \n\nYour main task is to compare a set of documents relative to the research question specified below. \n\nCompare the documents, find similarities and differences. Justify your insights by providing evidence from the documents in the form: 
+                                    Source:
+                                    Excerpt from the document:
+                                    """, height=400, max_chars=10000)
                 QA = st.text_area("Ask a Question:", placeholder="Type your question here...", height=100, max_chars=5000)
                 _, center, _ = st.columns([5, 1, 5])
                 center.subheader('OR')
