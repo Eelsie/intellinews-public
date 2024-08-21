@@ -1,6 +1,6 @@
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 import streamlit as st
 import pandas as pd
@@ -79,7 +79,7 @@ if options == "🎫 Feedback Page":
 if options == "📚 Document Analysis":
     st.sidebar.container(height=100, border=0)
     st.sidebar.write('___')
-    chk_HS_prompt = st.sidebar.checkbox('Use HS prompt"', value=False, key='chk_HS_prompt')
+    chk_HS_prompt = st.sidebar.checkbox('Use HS prompt', value=False, key='chk_HS_prompt')
     chk_advanced_prompt = st.sidebar.checkbox('Show Advanced Prompt Engineering Option for "Document Analyzer"', value=False, key='chk_advanced_prompt')
     base_prompt = HS_PROMPT if chk_HS_prompt else DOC_ANALYSIS_BASE_PROMPT
     advanced_prompt = ''
