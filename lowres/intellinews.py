@@ -291,7 +291,7 @@ if options == "📚 Document Analysis":
                 st.markdown('<div></div>', unsafe_allow_html=True)
                 _, center, _ = st.columns(3)
                 center.subheader('FROM DOCUMENTS')
-                QDOCS = st.multiselect("Select Document(s):", df['title'].unique(), max_selections=5)
+                QDOCS = st.multiselect("Select Document(s):", df['title'].unique(), max_selections=30)
             with cf2:
                 st.markdown('<div></div>', unsafe_allow_html=True)
                 st.write("###### Output Options:")
