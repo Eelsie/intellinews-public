@@ -184,15 +184,6 @@ if options == "📚 Document Analysis":
                                 text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
                             
                             texts.append(text)
-                            
-                            st.header(title)
-                            st.write(f"Document Result Index: {i}")
-                            st.caption(f"Source: {results_df['url'].iloc[i]}")
-                            st.write('___')
-
-                            st.subheader('Summary *(English)*:')
-                            summary = generate_summarization(text, llm)
-                            st.write(summary)
 
                             for lang in SUPPORTED_LANGUAGES_T:
                                 if st.session_state[f'chk_{lang.lower()}']:
