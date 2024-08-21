@@ -1,0 +1,9 @@
+.env
+.devcontainer
+
+.streamlit/secrets.toml
+
+data/feedback.txt
+data/intellinews.db/*
+data/documents/*
+data/intellinews.csv
