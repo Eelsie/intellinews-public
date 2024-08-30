@@ -177,18 +177,18 @@ if options == "📚 Document Analysis":
                     Q = QA
 
                 cf1.markdown('___', unsafe_allow_html=True)
+                retrieve_results_btn = cf1.form_submit_button("Retrieve Results")
                 if 'doc_analyzer_docanalysis' in st.session_state:
-                    btn_ask = cf1.form_submit_button("Analyze Documents", disabled=True)
+                    btn_ask = cf1.form_submit_button("Analyze Documents", disabled=False)
                 else:
                     btn_ask = cf1.form_submit_button("Analyze Documents")
 
-            if btn_ask and Q.strip() != '':
+            if retrieve_results_btn and Q.strip() != '':
                 if len(QDOCS) <= 1:
                     st.error("Please select at least two documents for comparison.")
                 else:
-                    if 'doc_analyzer_query' not in st.session_state:
-                        st.session_state['doc_analyzer_query'] = Q
-
+                    st.session_state['doc_analyzer_query'] = Q
+                    st.session_state['expanded_queries'] = []
                     # Semantic Search Results
                     if 'expand_queries' in st.session_state and st.session_state['expand_queries']:
                         expanded_queries = expand_query(Q, 4, llm, 1.2)
@@ -201,74 +201,55 @@ if options == "📚 Document Analysis":
                         results = semantic_search_separated_documents(Q, k=K, collection=collection, titles=QDOCS)
                     else:
                         results = semantic_search(Q, k=K, collection=collection, titles=QDOCS)
-                    if 'doc_analyzer_result' not in st.session_state:
-                        st.session_state['doc_analyzer_result'] = results
-
-                    # Inspect Results
-                    data_dict = {
-                        'ids': results['ids'][0],
-                        'distances': results['distances'][0],
-                        'documents': results['documents'][0],
-                        'title': [eval(str(m))['title'] for m in results['metadatas'][0]],
-                        'url': [eval(str(m))['url'] for m in results['metadatas'][0]],
-                        'metadata': results['metadatas'][0]
-                    }
-
-                    results_df = pd.DataFrame(data_dict)
-                    cols = st.columns(results_df['title'].nunique())
-                    unique_titles = results_df['title'].unique()
-
-                    texts = [] # for HS analysis using joined chunks
-                    for i in range(len(cols)):
-                        with cols[i]:
-                            title = unique_titles[i]
-                            tmp_df = results_df[results_df['title'] == title]
-                            source = ''
-                            text = ''
-
-                            for x in range(tmp_df.shape[0]):
-                                source = f"Source: {tmp_df['url'].iloc[x]}"
-                                text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
-
-                            texts.append(text) # for HS analysis using joined chunks
-
-                            if 'chk_show_summary' in st.session_state and st.session_state['chk_show_summary']:
-                                summary = ''
-                                for il, lang in enumerate(SUPPORTED_LANGUAGES_T):
-                                    if doc_lang == lang: #st.session_state[f'chk_{lang.lower()}']:
-                                        if summary == '':
-                                            summary = generate_summarization(text, llm)
-                                            if 'doc_analyzer_summary' not in st.session_state:
-                                                st.session_state[f'doc_analyzer_col{i}_summary'] = summary
-                                        translation = generate_translation(summary, lang, llm)
-                                        if f'doc_analyzer_{lang}_translation' not in st.session_state:
-                                            st.session_state[f'doc_analyzer_col{i}_{lang}_translation'] = translation
-                                        break
-
-                            if 'chk_sentiment' in st.session_state and st.session_state['chk_sentiment']:
-                                sentiment_analysis = generate_sentiment_analysis(text, llm)
-                                if 'doc_analyzer_sentiment_analysis' not in st.session_state:
-                                    st.session_state[f'doc_analyzer_col{i}_sentiment_analysis'] = sentiment_analysis
-
-                            if 'chk_keywords' in st.session_state and st.session_state['chk_keywords']:
-                                top_k = st.session_state['top_keywords'] or 10
-                                topic_labels = generate_topic_labels(text, llm, top_k=top_k)
-                                if 'doc_analyzer_topic_labels' not in st.session_state:
-                                    st.session_state[f'doc_analyzer_col{i}_topic_labels'] = topic_labels
-
-                    document_analysis = ''
-                    if newsroom  == "Helsingin Sanomat":
-                        document_analysis = generate_document_analysis_hs(Q, unique_titles, texts, llm, advanced_prompt)
-                    else:
-                        document_analysis = generate_document_analysis(Q, results_df, llm, advanced_prompt)
-
-                    # Translate the document analysis using the user's language of choice
-                    document_analysis = generate_translation(document_analysis, doc_lang, llm)
-
-                    if 'doc_analyzer_docanalysis' not in st.session_state:
-                        st.session_state['doc_analyzer_docanalysis'] = document_analysis
-
+                    # if 'doc_analyzer_result' not in st.session_state:
+                                    
+                    st.session_state['doc_analyzer_result'] = results
                     st.rerun()
+
+                                    
+            if btn_ask and Q.strip() != '':
+                results = st.session_state['doc_analyzer_result']
+                # Inspect Results
+                data_dict = {
+                    'ids': results['ids'][0],
+                    'distances': results['distances'][0],
+                    'documents': results['documents'][0],
+                    'title': [eval(str(m))['title'] for m in results['metadatas'][0]],
+                    'url': [eval(str(m))['url'] for m in results['metadatas'][0]],
+                    'metadata': results['metadatas'][0]
+                }
+
+                results_df = pd.DataFrame(data_dict)
+                cols = st.columns(results_df['title'].nunique())
+                unique_titles = results_df['title'].unique()
+
+                texts = [] # for HS analysis using joined chunks
+                for i in range(len(cols)):
+                    with cols[i]:
+                        title = unique_titles[i]
+                        tmp_df = results_df[results_df['title'] == title]
+                        source = ''
+                        text = ''
+
+                        for x in range(tmp_df.shape[0]):
+                            source = f"Source: {tmp_df['url'].iloc[x]}"
+                            text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
+
+                        texts.append(text) # for HS analysis using joined chunks
+                        
+                document_analysis = ''
+                if newsroom  == "Helsingin Sanomat":
+                    document_analysis = generate_document_analysis_hs(Q, unique_titles, texts, llm, advanced_prompt)
+                else:
+                    document_analysis = generate_document_analysis(Q, results_df, llm, advanced_prompt)
+
+                # Translate the document analysis using the user's language of choice
+                document_analysis = generate_translation(document_analysis, doc_lang, llm)
+
+                if 'doc_analyzer_docanalysis' not in st.session_state:
+                    st.session_state['doc_analyzer_docanalysis'] = document_analysis
+
+                st.rerun()
 
             # Document Analyzer's feedback to be submitted and states has been updated
             if 'doc_analyzer_query' in st.session_state:
@@ -292,7 +273,7 @@ if options == "📚 Document Analysis":
                 with st.expander("Semantic Data Analysis:", expanded=True):
                     st.subheader('Query:')
                     st.write(Q)
-                    if 'expanded_queries' in st.session_state:
+                    if 'expanded_queries' in st.session_state and len(st.session_state['expanded_queries']) > 0:
                         st.subheader('Expanded queries:')
                         queries_str = ''
                         for query in st.session_state['expanded_queries'][:-1]:
