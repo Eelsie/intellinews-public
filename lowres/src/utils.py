@@ -1,46 +1,78 @@
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-import os
-import pandas as pd
-from sklearn.feature_extraction import text
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+#### Uncomment the code above in Production Environment
+#######################################################################################################
+
 import streamlit as st
+from streamlit_feedback import streamlit_feedback
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import openai
 from openai import OpenAI
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 import spacy
+import spacy_streamlit
+from wordcloud import WordCloud
+from sklearn.feature_extraction import text
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+from langchain_community.document_loaders import PyPDFLoader
 
+from src.prompts import *
+
+# # Development Environment
+# load_dotenv()
+# OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
+# IS_PROD = False
+
+# Production Environment
 OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
-TAGALOG_STOP_WORDS = set("applause nga ug eh yun yan yung kasi ko akin aking ako alin am amin aming ang ano anumang apat at atin ating ay bababa bago bakit bawat bilang dahil dalawa dapat din dito doon gagawin gayunman ginagawa ginawa ginawang gumawa gusto habang hanggang hindi huwag iba ibaba ibabaw ibig ikaw ilagay ilalim ilan inyong isa isang itaas ito iyo iyon iyong ka kahit kailangan kailanman kami kanila kanilang kanino kanya kanyang kapag kapwa karamihan katiyakan katulad kaya kaysa ko kong kulang kumuha kung laban lahat lamang likod lima maaari maaaring maging mahusay makita marami marapat masyado may mayroon mga minsan mismo mula muli na nabanggit naging nagkaroon nais nakita namin napaka narito nasaan ng ngayon ni nila nilang nito niya niyang noon o pa paano pababa paggawa pagitan pagkakaroon pagkatapos palabas pamamagitan panahon pangalawa para paraan pareho pataas pero pumunta pumupunta sa saan sabi sabihin sarili sila sino siya tatlo tayo tulad tungkol una walang ba eh kasi lang mo naman opo po si talaga yung".split())
-EMBEDDING_MODEL = 'text-embedding-3-large'  # 'text-embedding-3-small'
-SPACY_MODEL = spacy.load(os.path.join(os.getcwd(), 'lowres/en_core_web_sm/en_core_web_sm-3.7.1')) # 'en_core_web_lg'
+IS_PROD = True
+
+PROJ_DIR = 'lowres/' if IS_PROD else ''
+EMBEDDING_MODEL = 'text-embedding-3-large'
+SPACY_MODEL = spacy.load(os.path.join(os.getcwd(), f'{PROJ_DIR}en_core_web_sm/en_core_web_sm-3.7.1')) # change to 'en_core_web_lg' if hosted on a server with more resources
 ENTITY_LABELS = ['PERSON', 'EVENT', 'DATE', 'GPE', 'ORG', 'FAC', 'LANGUAGE', 'LAW', 'LOC', 'MONEY', 'NORP', 'ORDINAL']
 CANDIDATE_LABELS = ['Economic Growth', 'Healthcare Reform', 'Education Initiatives', 'Infrastructure Development', 'Environmental Policies', 'Agricultural Support', 'Employment and Labor', 'Social Welfare Programs', 'Foreign Relations', 'Public Safety and Security']
-SUPPORTED_LANGUAGES_T = ['Finnish', 'Tagalog', 'Cebuano', 'Ilocano', 'Hiligaynon']
-
+SUPPORTED_LANGUAGES_T = ['English', 'Finnish', 'Tagalog', 'Cebuano', 'Ilocano', 'Hiligaynon']
+TAGALOG_STOP_WORDS = set("applause nga ug eh yun yan yung kasi ko akin aking ako alin am amin aming ang ano anumang apat at atin ating ay bababa bago bakit bawat bilang dahil dalawa dapat din dito doon gagawin gayunman ginagawa ginawa ginawang gumawa gusto habang hanggang hindi huwag iba ibaba ibabaw ibig ikaw ilagay ilalim ilan inyong isa isang itaas ito iyo iyon iyong ka kahit kailangan kailanman kami kanila kanilang kanino kanya kanyang kapag kapwa karamihan katiyakan katulad kaya kaysa ko kong kulang kumuha kung laban lahat lamang likod lima maaari maaaring maging mahusay makita marami marapat masyado may mayroon mga minsan mismo mula muli na nabanggit naging nagkaroon nais nakita namin napaka narito nasaan ng ngayon ni nila nilang nito niya niyang noon o pa paano pababa paggawa pagitan pagkakaroon pagkatapos palabas pamamagitan panahon pangalawa para paraan pareho pataas pero pumunta pumupunta sa saan sabi sabihin sarili sila sino siya tatlo tayo tulad tungkol una walang ba eh kasi lang mo naman opo po si talaga yung".split())
 APP_NAME = 'SENTINEL: Semantic Evaluation and Natural Text Intelligence Learning System'
 APP_DESC = ' `by @Team IntelliNews`'
 ABOUT_SENTINEL_1 = """SENTINEL is a powerful document analysis and comparison tool, driven by cutting-edge Large Language Models (LLMs) and advanced Natural Language Processing (NLP) technologies. It excels in conducting semantic evaluations to uncover similarities, differences, and nuanced relationships within textual data. Whether analyzing documents for investigative journalism, content comparison, or extracting key insights, SENTINEL delivers precise and actionable results."""
 ABOUT_SENTINEL_2 = """Ideal for newsrooms and investigative journalists, SENTINEL enhances research capabilities by swiftly identifying patterns, sentiments, and critical information buried within extensive text corpora. Its intelligent learning system continuously refines accuracy, ensuring reliable and efficient analysis across diverse document types and sources. SENTINEL empowers users to uncover hidden connections and trends, making it an indispensable tool for driving informed decisions and impactful storytelling."""
 K = 10
-APP_DOCS = os.path.join(os.getcwd(), 'data/documents')
-DF_CSV = os.path.join(os.getcwd(), 'data/intellinews.csv')
-DB_PATH = os.path.join(os.getcwd(), 'data/intellinews.db')
+DEFAULT_NUM_INPUT = 10
+MAX_DOCS = 5
+EXP_MAX_DOCS = 30
+MIN_RESULTS_PER_DOC = 5
+MAX_RESULTS_PER_DOC = 50
+MIN_NUM_KWORDS = 5
+MAX_NUM_KWORDS = 20
 COLLECTION_NAME = "intellinews"
+APP_DOCS = os.path.join(os.getcwd(), f'{PROJ_DIR}data/documents')
+DF_CSV = os.path.join(os.getcwd(), f'{PROJ_DIR}data/intellinews.csv')
+DB_PATH = os.path.join(os.getcwd(), f'{PROJ_DIR}data/intellinews.db')
+FEEDBACK_FILE = os.path.join(os.getcwd(), f'{PROJ_DIR}data/feedback.csv')
+FEEDBACK_FACES = {
+    "😀": ":smiley:", "🙂": ":sweat_smile:", "😐": ":neutral_face:", "🙁": ":worried:", "😞": ":disappointed:"
+}
 
-        #     Recommendations: Recommendations / Action items
-        # """
 COLOR_BLUE = "#0c2e86"
 COLOR_RED = "#a73c07"
 COLOR_YELLOW = "#ffcd34"
 COLOR_GRAY = '#f8f8f8'
 
-scroll_back_to_top_btn = f"""
+SCROLL_BACK_TO_TOP_BTN = f"""
 <style>
     .scroll-btn {{
         position: absolute;
         border: 2px solid #31333f;
-        background: {COLOR_GRAY};
+        background: #31333f;
         border-radius: 10px;
         padding: 2px 10px;
         bottom: 0;
@@ -52,28 +84,14 @@ scroll_back_to_top_btn = f"""
         border-color: #ff4b4b;
     }}
 </style>
-<a href="#government-processease">
+<a href="#start">
+    <br />
     <button class='scroll-btn'>
-        Back to Top
+        New Query
     </button>
 </a>
 """
 
-FEEDBACK_FACES = {
-    "😀": ":smiley:", "🙂": ":sweat_smile:", "😐": ":neutral_face:", "🙁": ":worried:", "😞": ":disappointed:"
-}
-
-
-#######################################################################################################
-
-# @st.cache_data()
-def init_data():
-    df = pd.DataFrame(columns=['url', 'title', 'speech'])
-    try:
-        df = pd.read_csv(DF_CSV)
-    except:
-        pass
-    return df
 #######################################################################################################
 
 def get_openai_client():
@@ -81,7 +99,7 @@ def get_openai_client():
     return client
 #######################################################################################################
 
-def init_chroma_db(collection_name, db_path):
+def init_chroma_db(collection_name, db_path=DB_PATH):
     # Create a Chroma Client
     chroma_client = chromadb.PersistentClient(path=db_path)
 
@@ -112,6 +130,64 @@ def semantic_search(Q, k=K, collection=None,  titles=[]):
 #     return results
 #######################################################################################################
 
+def semantic_search_separated_documents(Q, k=K, collection=None, titles=[]):
+    results = {
+        'ids': [[]],
+        'distances': [[]],
+        'metadatas': [[]],
+        'documents': [[]]
+    }
+    for title in titles:
+        title_results = collection.query(
+            query_texts=[Q],
+            n_results=k, 
+            where={'title': title}
+        )
+        for key in results:
+            if key in title_results and isinstance(results[key], list) and isinstance(title_results[key], list):
+                results[key][0].extend(title_results[key][0])
+    return results
+#######################################################################################################
+
+def semantic_search_expanded(Q, expanded_queries, k=K, collection=None, titles=[], separate_documents=False, llm=None):
+    expanded_queries.append(Q)
+    
+    results = {
+        'ids': [[]],
+        'distances': [[]],
+        'metadatas': [[]],
+        'documents': [[]]
+    }
+        
+    for query in expanded_queries:
+        if separate_documents:
+            partial_results = semantic_search_separated_documents(query, k, collection, titles)
+        else:
+            partial_results = semantic_search(query, k, collection, titles)
+            
+        for key in results:
+            if key in partial_results and isinstance(results[key], list) and isinstance(partial_results[key], list):
+                results[key][0].extend(partial_results[key][0])
+                    
+    # Remove duplicates from documents and corresponding metadata, distances, and ids
+    seen_documents = set()
+    unique_results = {
+        'ids': [[]],
+        'distances': [[]],
+        'metadatas': [[]],
+        'documents': [[]]
+    }
+    
+    for i, doc in enumerate(results['documents'][0]):
+        if doc not in seen_documents:
+            seen_documents.add(doc)
+            unique_results['documents'][0].append(doc)
+            unique_results['ids'][0].append(results['ids'][0][i])
+            unique_results['distances'][0].append(results['distances'][0][i])
+            unique_results['metadatas'][0].append(results['metadatas'][0][i])
+    return unique_results
+#######################################################################################################
+
 def upsert_documents_to_collection(collection, documents):
     # Every document needs an id for Chroma
     last_idx = len(collection.get()['ids'])
@@ -122,6 +198,14 @@ def upsert_documents_to_collection(collection, documents):
     # Update/Insert some text documents to the db collection
     collection.upsert(ids=ids, documents=docs,  metadatas=mets)
 #######################################################################################################
+
+def expand_query(Q, nr_queries=4, llm=None, temperature=1):
+    task = 'Query Expansion'
+    prompt = f"Perform query expansion. If there are multiple common ways of phrasing a user question or common synonyms for key words in the question, make sure to return multiple versions of the query with the different phrasings. Generate {nr_queries} variations of the following query delimited by backticks:\n\n```{Q}```. Don't write any extra text except the queries, don't number the queries and divide them by a new line."
+    response = generate_response(task, prompt, llm, temperature)
+    expanded_queries = response.split('\n')  # Assuming each variation is on a new line
+    expanded_queries = [query.strip() for query in expanded_queries]
+    return expanded_queries
 
 def generate_response(task, prompt, llm, temperature=0.):
     response = llm.chat.completions.create(
@@ -164,17 +248,30 @@ def generate_sentiment_analysis(doc, llm):
     return response
 #######################################################################################################
 
-def generate_document_analysis(Q, titles, texts, llm, advanced_prompt):
+def generate_document_analysis(Q, df, llm, advanced_prompt):
     task = 'Document analysis and comparison'
+    titles = df['title'].to_list()
+    documents = df['documents'].to_list()
+    doc_input = ''
+    for i in range(len(df)):
+        doc_input += f"""
+        Document {i} Title: {titles[i]}
+        Document {i} Content: {documents[i]}
+        """
+    prompt = advanced_prompt.replace('{{QUESTION}}', Q).replace('{{DOCUMENTS}}', doc_input).replace('{{TITLE_0}}', titles[0]).replace('{{TITLE_1}}', titles[1])
+    response = generate_response(task, prompt, llm)
+    return response
+#######################################################################################################
 
+def generate_document_analysis_hs(Q, titles, texts, llm, advanced_prompt): # HS_ANALYSIS
+    task = 'Document analysis and comparison'
     doc_input = 'Each document has a title and content and is delimited by triple backticks.'
     for i in range(len(titles)):
         doc_input += f"""
-        
         ```Document title: {titles[i]} Content: {texts[i]}```
         """
 
-    prompt = advanced_prompt.replace('{{QUESTION}}', Q).replace('{{DOCUMENTS}}', doc_input).replace('{{TITLE_0}}', titles[0]).replace('{{TITLE_1}}', titles[1])
+    prompt = advanced_prompt.replace('{{QUESTION}}', Q).replace('{{DOCUMENTS}}', doc_input)
     response = generate_response(task, prompt, llm)
     return response
 #######################################################################################################
@@ -192,10 +289,10 @@ def generate_response_to_question(Q, text, titles, llm):
     return response
 #######################################################################################################
 
-def ask_query(Q, titles, llm, k=15, collection=None):
+def ask_query(Q, titles, llm, collection, k=15):
     """Function to go from question to query to proper answer"""
     # Get related documents
-    results = semantic_search(Q, k, collection, titles=titles)
+    results = semantic_search(Q, k=K, collection=collection, titles=titles)
 
     # Get the text of the documents
     # text = query_result['documents'][0][0] TODO
@@ -252,6 +349,16 @@ def plot_wordcloud(df, column):
     return fig
 #######################################################################################################
 
+# @st.cache_data()
+def init_data():
+    df = pd.DataFrame(columns=['url', 'title', 'speech'])
+    try:
+        df = pd.read_csv(DF_CSV)
+    except:
+        pass
+    return df
+#######################################################################################################
+
 def save_uploadedfile(uploadedfile):
     if not os.path.exists(APP_DOCS):
         os.makedirs(APP_DOCS)
@@ -262,23 +369,105 @@ def save_uploadedfile(uploadedfile):
     return file_path
 #######################################################################################################
 
-def _submit_feedback(feedback, *args, **kwargs):
+def submit_feedback(feedback, *args, **kwargs):
+    score = feedback['score']
+    reax = FEEDBACK_FACES.get(score)
+    newsroom = kwargs["newsroom"]
+    fb_type = kwargs['type']
     question = kwargs['question']
+    prompt = kwargs['prompt']
     llm_response = kwargs['llm_response']
     documents = kwargs['documents']
     feedback_sent = kwargs["feedback_time"]
+    comment = feedback['text']
+
+    fbk_from = kwargs['fbk_from']
+    if fbk_from == 'rag_chatbot_fbk':
+        st.session_state['ragchat_feedback_sent'] = True
+    elif fbk_from == 'document_analyzer_fbk':
+        st.session_state['docanalyzer_feedback_sent'] = True
     try:
-        with open("data/feedback.txt", "a") as f:
-            line = '================================================================================================================================================\n\n'
-            reax = FEEDBACK_FACES.get(feedback['score'])
-            text = f"{line}*Feedback was sent at {feedback_sent}*\n\n**Documents:** {documents}\n\n**QUESTION:** {question}\n\n**RESPONSE:** {llm_response}\n\n**FEEDBACK:**\n> Reaction: {reax}\n\n> Comment: {feedback['text']}\n\n"
-            f.write(text)
-            st.toast("Thank you for the feedback!", icon='🎉')
-    except:
-        pass
+        fb_data = {
+            'timestamp': feedback_sent,
+            'type': fb_type,
+            'newsroom': newsroom,
+            'documents': documents,
+            'question': question,
+            'prompt': prompt,
+            'response': llm_response,
+            'reaction': reax,
+            'score': score,
+            'comment': comment
+        }
+        new_df = pd.DataFrame([fb_data])
+        if os.path.exists(FEEDBACK_FILE):
+            fb_df = pd.read_csv(FEEDBACK_FILE)
+            df = pd.concat([fb_df, new_df], axis=0).reset_index(drop=True)
+            df.to_csv(FEEDBACK_FILE, index=False)
+        else:
+            new_df.to_csv(FEEDBACK_FILE, index=False)
+
+    except Exception as ex:
+        st.error(ex)
 #######################################################################################################
 
 def display_feedback():
-    if os.path.exists("data/feedback.txt"):
-        with open("data/feedback.txt", "r") as f:
-            st.markdown(f.read())
+    if os.path.exists(FEEDBACK_FILE):
+        st.dataframe(pd.read_csv(FEEDBACK_FILE), height=750, width=1400)
+    else:
+        st.error('No feedback submitted yet.')
+#######################################################################################################
+
+def scroll_to_top():
+    js = '''
+    <script>
+        var body = window.parent.document.querySelector("#start");
+        console.log(body);
+        body.scrollTop = 0;
+    </script>
+    '''
+    st.html(js)
+
+#######################################################################################################
+
+def reset_document_analyzer():
+    for key in st.session_state.keys():
+        if 'newsroom' != key:
+            del st.session_state[key]
+#######################################################################################################
+
+def reset_ragchatbot():
+    reset_document_analyzer()
+#######################################################################################################
+
+def blank(lines=1):
+    for _ in range(lines):
+        st.markdown('<div></div>', unsafe_allow_html=True)
+#######################################################################################################
+
+@st.dialog("What newsroom are you affiliated with?")
+def set_newsroom():
+    newsrooms = ['Helsingin Sanomat', 'GMA Network']
+    newsroom = st.radio("Select Newsroom:", newsrooms)
+    # name = st.text_input("Enter your name:")
+    # position = st.text_input("Enter your position:")
+    st.container(height=10, border=0)
+    if st.button("Select"):
+        st.session_state.newsroom = {"newsroom": newsroom} #, "name": name, "position": position}
+        st.rerun()
+#######################################################################################################
+
+def set_docanalyzer_feedback(Q, prompt, document_analysis, QDOCS, newsroom):
+    if 'docanalyzer_feedback_sent' not in st.session_state:
+        st.session_state.docanalyzer_feedback_sent = False
+    current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    fbk_from = 'document_analyzer_fbk'
+    if streamlit_feedback(
+        feedback_type="faces",
+        optional_text_label="Please provide some more information here...",
+        align='flex-start',
+        kwargs={"fbk_from":fbk_from, "type": "document_analyzer", "newsroom": newsroom, "question": Q, "prompt": prompt, "llm_response": document_analysis, "documents": ', '.join(QDOCS), "feedback_time": current_date},
+        on_submit=submit_feedback
+    ):
+        st.session_state.docanalyzer_feedback_sent = True
+#######################################################################################################
