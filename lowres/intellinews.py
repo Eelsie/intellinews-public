@@ -97,7 +97,10 @@ if options == "📚 Document Analysis":
     chk_advanced_prompt = st.sidebar.checkbox('Show Advanced Prompt Engineering', value=False)
     prompt_template = ''
     if newsroom == "Helsingin Sanomat":
-        prompt_template = HS_PROMPT
+        if num_experimental_max_docs > 5:
+            prompt_template = HS_PROMPT_MANY_DOCUMENTS
+        else:
+            prompt_template = HS_PROMPT
     else:
         prompt_template = DOC_ANALYSIS_BASE_PROMPT
 
@@ -239,6 +242,11 @@ if options == "📚 Document Analysis":
                         
                 document_analysis = ''
                 if newsroom  == "Helsingin Sanomat":
+                    if 'num_experimental_max_docs' in st.session_state and st.session_state['num_experimental_max_docs'] > 5:
+                        summaries = []
+                        for text in texts:
+                            summaries.append(generate_focused_summarization(Q, text, llm))
+                        texts = summaries
                     document_analysis = generate_document_analysis_hs(Q, unique_titles, texts, llm, advanced_prompt)
                 else:
                     document_analysis = generate_document_analysis(Q, results_df, llm, advanced_prompt)
