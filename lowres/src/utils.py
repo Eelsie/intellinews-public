@@ -218,6 +218,7 @@ def expand_query(Q, nr_queries=4, llm=None, temperature=1):
     expanded_queries = response.split('\n')  # Assuming each variation is on a new line
     expanded_queries = [query.strip() for query in expanded_queries]
     filtered_queries = [s for s in expanded_queries if s and len(s) <= 500]
+    print(filtered_queries)
     return filtered_queries
 
 def generate_response(task, prompt, llm, temperature=0.):
