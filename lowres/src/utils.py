@@ -201,7 +201,7 @@ def upsert_documents_to_collection(collection, documents):
 
 def expand_query(Q, nr_queries=4, llm=None, temperature=1):
     task = 'Query Expansion'
-    prompt = f"""You are an AI language model assistant. Your task is to analyze a given query, expand its scope by rephrasing and adding context, and handle complex queries by splitting them into simpler, more focused sub-queries.
+    prompt = f"""You are an AI language model assistant. Your task is to generate different versions of the given user question to retrieve relevant documents from a vector database. By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of the distance-based similarity search. Handle complex queries by splitting them into simpler, more focused sub-queries.
 
     Instructions:
 
