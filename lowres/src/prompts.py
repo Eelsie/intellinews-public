@@ -52,21 +52,45 @@ DOC_ANALYSIS_BASE_PROMPT = """
 
             Conclusion: Overall summary of the analysis goes here
         """
-        
-        
+
+#################################################################################################################################################################
+#################################################################################################################################################################
+#################################################################################################################################################################
+
 HS_PROMPT = """
-You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material. 
+You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material.
 
-Your main task is to compare a set of documents relative to the research question specified below. 
+Your main task is to examine these documents in relation to the following research question, denoted by double quotes: "{{QUESTION}}".
 
-Research question delimited by triple quotes: "/"/"/{{QUESTION}}"/"/"/.
+Compare the documents, find similarities and differences. Use only the provided documents and do not attempt to infer or fabricate an answer. If not directly stated in the documents, say that and don't give assumptions. Tell if a document doesn't contain anything related to the research question. 
 
-To answer the research question, use the following documents:
-{{DOCUMENTS}}.
+If only one document is relevant to the research question, begin your response with the statement: "Only one document contained relevant information regarding the research question." In this case, do not compare; instead, summarize the key points from that document.
 
-Compare the documents, find similarities and differences. Use only the provided documents and do not attempt to fabricate an answer. 
+To support your analysis, justify your insights with evidence from the documents. Format your references as follows:
+- Source: [Document Title]
+- Excerpt: [Approximately 100 words from the document that supports your claim]
 
-Justify your insights by providing evidence from the documents in the form: 
-Source:
-Excerpt from the document:       
+Answer in Finnish.
+
+Use the following documents to answer the research question: {{DOCUMENTS}}.
+
+"""
+
+HS_PROMPT_MANY_DOCUMENTS = """
+You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material.
+
+Your main task is to examine these documents in relation to the following research question, denoted by double quotes: "{{QUESTION}}".
+
+Use only the provided documents and do not attempt to infer or fabricate an answer. If not directly stated in the documents, say that and don't give assumptions. Tell if a document doesn't contain anything related to the research question. 
+
+If only one document is relevant to the research question, begin your response with the statement: "Only one document contained relevant information regarding the research question." In this case, do not compare; instead, summarize the key points from that document.
+
+To support your analysis, justify your insights with evidence from the documents. Format your references as follows:
+- Source: [Document Title]
+- Excerpt: [Approximately 100 words from the document that supports your claim]
+
+Answer in Finnish.
+
+Use the following documents to answer the research question: {{DOCUMENTS}}.
+
 """
