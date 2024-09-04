@@ -201,11 +201,24 @@ def upsert_documents_to_collection(collection, documents):
 
 def expand_query(Q, nr_queries=4, llm=None, temperature=1):
     task = 'Query Expansion'
-    prompt = f"Perform query expansion. If there are multiple common ways of phrasing a user question or common synonyms for key words in the question, make sure to return multiple versions of the query with the different phrasings. Generate {nr_queries} variations of the following query delimited by backticks:\n\n```{Q}```. Don't write any extra text except the queries, don't number the queries and divide them by a new line."
+    prompt = f"""You are an AI language model assistant. Your task is to analyze a given query, expand its scope by rephrasing and adding context, and handle complex queries by splitting them into simpler, more focused sub-queries.
+
+    Instructions:
+
+    - Analyze this query delimited by backticks: ```{Q}```. Identify whether the query contains multiple components or aspects that can be logically separated.
+    
+    - Split Complex Queries: if the query is complex, break it down into distinct sub-queries. Each sub-query should focus on a specific aspect of the original query.
+    
+    - Perform Query Expansion: For each sub-query, generate {nr_queries} different expanded versions. These expanded versions should rephrase the sub-query using synonyms or alternative wording.
+    
+    - Output Format: Provide the expanded queries in a list format, with each query on a new line. Don't write any extra text except the queries, don't number the queries and don't divide the queries by empty lines.
+    
+    Answer in Finnish."""
     response = generate_response(task, prompt, llm, temperature)
     expanded_queries = response.split('\n')  # Assuming each variation is on a new line
     expanded_queries = [query.strip() for query in expanded_queries]
-    return expanded_queries
+    filtered_queries = [s for s in expanded_queries if s and len(s) <= 500]
+    return filtered_queries
 
 def generate_response(task, prompt, llm, temperature=0.):
     response = llm.chat.completions.create(
