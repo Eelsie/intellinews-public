@@ -243,7 +243,7 @@ def generate_summarization(doc, llm):
 def generate_focused_summarization(Q, doc, llm):
     task = 'Text Summarization'
     prompt = f"""Make a summary of the document below with a focus on answering the following research question delimited by double quotes: "{Q}". 
-    Please extract and condense the key points and findings relevant to this question, highlighting any important data, conclusions, or implications.
+    Please extract and condense the key points and findings relevant to this question, highlighting any important data, conclusions, or implications. Answer in Finnish.
     Here is the document to analyse delimited by three backticks:
     ```{doc}```"""
     response = generate_response(task, prompt, llm)
