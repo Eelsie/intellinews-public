@@ -240,10 +240,18 @@ def generate_summarization(doc, llm):
     response = generate_response(task, prompt, llm)
     return response
 
-def generate_focused_summarization(Q, doc, llm):
+def generate_focused_summarization(Q, doc, newsroom, llm):
     task = 'Text Summarization'
+    if newsroom == 'Helsingin Sanomat':
+        language_prompt = "Answer in Finnish."
+    else:
+        language_prompt = "Answer in English."
     prompt = f"""Make a summary of the document below with a focus on answering the following research question delimited by double quotes: "{Q}". 
-    Please extract and condense the key points and findings relevant to this question, highlighting any important data, conclusions, or implications. Answer in Finnish.
+    Please extract and condense the key points and findings relevant to this question, highlighting any important data, conclusions, or implications. 
+    Justify your insights with evidence from the documents. Format your references as follows:
+    - Source: [Document Title]
+    - Excerpt: [Approximately 100 words from the document that supports your claim]
+    {language_prompt}
     Here is the document to analyse delimited by three backticks:
     ```{doc}```"""
     response = generate_response(task, prompt, llm)
