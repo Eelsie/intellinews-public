@@ -240,7 +240,7 @@ def generate_summarization(doc, llm):
     response = generate_response(task, prompt, llm)
     return response
 
-def generate_focused_summarization(Q, doc, newsroom, llm):
+def generate_focused_summarization(Q, doc, llm):
     task = 'Text Summarization'
     if newsroom == 'Helsingin Sanomat':
         language_prompt = "Answer in Finnish."
