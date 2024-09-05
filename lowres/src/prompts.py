@@ -89,7 +89,10 @@ Use only the provided documents and do not attempt to infer or fabricate an answ
 
 If only one document is relevant to the research question, begin your response with the statement: "Only one document contained relevant information regarding the research question." In this case, do not compare; instead, report the key points from that document.
 
-Include in your analysis the excerpts from the original documents.
+Include in your analysis the excerpts from the original documents, formatted in this form:
+Format your references as follows:
+- Source: [Document Title]
+- Excerpt: [Original excerpt]
 
 Answer in Finnish.
 
