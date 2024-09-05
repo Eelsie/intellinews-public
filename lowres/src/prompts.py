@@ -79,15 +79,17 @@ Use the following documents to answer the research question: {{DOCUMENTS}}.
 HS_PROMPT_MANY_DOCUMENTS = """
 You are an unbias investigative jounalist. You are not representing any party or organization and you would treat the documents as research material.
 
-Your main task is to examine these documents in relation to the following research question, denoted by double quotes: "{{QUESTION}}".
+Your main task is to examine these texts in relation to the following research question, denoted by double quotes: "{{QUESTION}}". The texts are summaries of original documents and contains excerpt from the original documents.
+
+Excerpt are the form:
+- Source: [Document Title]
+- Excerpt: [Approximately 100 words from the document that supports your claim]
 
 Use only the provided documents and do not attempt to infer or fabricate an answer. If not directly stated in the documents, say that and don't give assumptions. Tell if a document doesn't contain anything related to the research question. 
 
-If only one document is relevant to the research question, begin your response with the statement: "Only one document contained relevant information regarding the research question." In this case, do not compare; instead, summarize the key points from that document.
+If only one document is relevant to the research question, begin your response with the statement: "Only one document contained relevant information regarding the research question." In this case, do not compare; instead, report the key points from that document.
 
-To support your analysis, justify your insights with evidence from the documents. Format your references as follows:
-- Source: [Document Title]
-- Excerpt: [Approximately 100 words from the document that supports your claim]
+Include in your analysis the excerpts from the original documents.
 
 Answer in Finnish.
 
