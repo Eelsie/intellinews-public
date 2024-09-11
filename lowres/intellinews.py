@@ -88,7 +88,7 @@ if options == "📚 Document Analysis":
         newsroom = st.session_state.newsroom["newsroom"]
     st.sidebar.container(height=5, border=0)
     st.sidebar.caption(':gear: &nbsp;&nbsp; Experimental Options for "Document Analyzer":')
-    num_experimental_max_docs = st.sidebar.number_input('Maximum Number of Selected Documents', min_value=MAX_DOCS, max_value=EXP_MAX_DOCS, step=5, key='num_experimental_max_docs')
+    num_experimental_max_docs = st.sidebar.number_input('Maximum Number of Selected Documents', min_value=MAX_DOCS, max_value=EXP_MAX_DOCS, step=1, key='num_experimental_max_docs')
 
     if num_experimental_max_docs > MAX_DOCS:
         st.sidebar.warning(f'**Note:** Output options such as _Text Summarization with Translation_, _Sentiment Classification_, _Keyword Extraction_, and _Name Entity Recognition (NER)_  is currently not supported if the number documents to be selected is more than {MAX_DOCS}.')
@@ -96,8 +96,8 @@ if options == "📚 Document Analysis":
     st.sidebar.container(height=5, border=0)
     chk_advanced_prompt = st.sidebar.checkbox('Show Advanced Prompt Engineering', value=False)
     prompt_template = ''
-    if newsroom == "Helsingin Sanomat":
-        if num_experimental_max_docs > 5:
+    if newsroom == NEWSROOM_HS:
+        if num_experimental_max_docs > MAX_DOCS:
             prompt_template = HS_PROMPT_MANY_DOCUMENTS
         else:
             prompt_template = HS_PROMPT
@@ -106,7 +106,10 @@ if options == "📚 Document Analysis":
 
     advanced_prompt = ''
     if chk_advanced_prompt:
-        st.sidebar.warning('**Note:** _{{QUESTION}}_, _{{DOCUMENTS}}_, _{{TITLE_0}}_, and _{{TITLE_1}}_ are placeholders for the actual values.')
+        if newsroom == NEWSROOM_HS:
+            st.sidebar.warning('**Note:** _{{QUESTION}}_, and _{{DOCUMENTS}}_ are placeholders for the actual values.')
+        else:
+            st.sidebar.warning('**Note:** _{{QUESTION}}_, _{{DOCUMENTS}}_, _{{TITLE_0}}_, and _{{TITLE_1}}_ are placeholders for the actual values.')
         advanced_prompt = st.sidebar.text_area("Prompt Template:", placeholder="Type your prompt here...", value=prompt_template.strip(), height=800, max_chars=5000)
     else:
         advanced_prompt = prompt_template
@@ -157,7 +160,8 @@ if options == "📚 Document Analysis":
                     # st.write("Select Translation Language(s) you want to translate the summary to:")
                     # for lang in SUPPORTED_LANGUAGES_T:
                     #     st.checkbox(lang, value=False, key=f'chk_{lang.lower()}')
-                    doc_lang = st.selectbox("Select Translation Language Option:", SUPPORTED_LANGUAGES_T, index=(1 if newsroom == "Helsingin Sanomat" else 0))
+                    SUPPORTED_LANGUAGES_T.insert(0, 'No translation')
+                    doc_lang = st.selectbox("Select Translation Language Option:", SUPPORTED_LANGUAGES_T, index=(0 if newsroom == NEWSROOM_HS else 1))
                     blank()
                     K = st.number_input('Number of Results(k) per Document:', min_value=MIN_RESULTS_PER_DOC, max_value=MAX_RESULTS_PER_DOC, value=K, step=5, key='number_input_k')
                     st.checkbox('Extract results(k) separately for each document', value=False, key='separate_documents_in_semantic_search')
@@ -180,21 +184,21 @@ if options == "📚 Document Analysis":
                     Q = QA
 
                 cf1.markdown('___', unsafe_allow_html=True)
-                retrieve_results_btn = cf1.form_submit_button("Retrieve Results")
                 if 'doc_analyzer_docanalysis' in st.session_state:
-                    btn_ask = cf1.form_submit_button("Analyze Documents", disabled=False)
+                    btn_ask = cf1.form_submit_button("Analyze Documents", disabled=True)
                 else:
                     btn_ask = cf1.form_submit_button("Analyze Documents")
 
-            if retrieve_results_btn and Q.strip() != '':
+            if btn_ask and Q.strip() != '':
                 if len(QDOCS) <= 1:
                     st.error("Please select at least two documents for comparison.")
                 else:
-                    st.session_state['doc_analyzer_query'] = Q
-                    st.session_state['expanded_queries'] = []
+                    if 'doc_analyzer_query' not in st.session_state:
+                        st.session_state['doc_analyzer_query'] = Q
+
                     # Semantic Search Results
                     if 'expand_queries' in st.session_state and st.session_state['expand_queries']:
-                        expanded_queries = expand_query(Q, 4, llm, 1.2)
+                        expanded_queries = expand_query(Q, newsroom, doc_lang, 4, llm, 1)
                         st.session_state['expanded_queries'] = expanded_queries
                         if 'separate_documents_in_semantic_search' in st.session_state and st.session_state['separate_documents_in_semantic_search']:
                             results = semantic_search_expanded(Q, expanded_queries, k=K, collection=collection, titles=QDOCS, separate_documents=True)
@@ -204,60 +208,81 @@ if options == "📚 Document Analysis":
                         results = semantic_search_separated_documents(Q, k=K, collection=collection, titles=QDOCS)
                     else:
                         results = semantic_search(Q, k=K, collection=collection, titles=QDOCS)
-                    # if 'doc_analyzer_result' not in st.session_state:
-                                    
-                    st.session_state['doc_analyzer_result'] = results
+                    if 'doc_analyzer_result' not in st.session_state:
+                        st.session_state['doc_analyzer_result'] = results
+
+                    # Inspect Results
+                    data_dict = {
+                        'ids': results['ids'][0],
+                        'distances': results['distances'][0],
+                        'documents': results['documents'][0],
+                        'title': [eval(str(m))['title'] for m in results['metadatas'][0]],
+                        'url': [eval(str(m))['url'] for m in results['metadatas'][0]],
+                        'metadata': results['metadatas'][0]
+                    }
+
+                    results_df = pd.DataFrame(data_dict)
+                    cols = st.columns(results_df['title'].nunique())
+                    unique_titles = results_df['title'].unique()
+
+                    texts = [] # for HS analysis using joined chunks
+                    for i in range(len(cols)):
+                        with cols[i]:
+                            title = unique_titles[i]
+                            tmp_df = results_df[results_df['title'] == title]
+                            source = ''
+                            text = ''
+
+                            for x in range(tmp_df.shape[0]):
+                                source = f"Source: {tmp_df['url'].iloc[x]}"
+                                text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
+
+                            texts.append(text) # for HS analysis using joined chunks
+
+                            if 'chk_show_summary' in st.session_state and st.session_state['chk_show_summary']:
+                                summary = ''
+                                for il, lang in enumerate(SUPPORTED_LANGUAGES_T):
+                                    if doc_lang == lang: #st.session_state[f'chk_{lang.lower()}']:
+                                        if summary == '':
+                                            summary = generate_summarization(text, llm)
+                                            if 'doc_analyzer_summary' not in st.session_state:
+                                                st.session_state[f'doc_analyzer_col{i}_summary'] = summary
+                                        if doc_lang != 'No translation':
+                                            translation = generate_translation(summary, lang, llm)
+                                        if f'doc_analyzer_{lang}_translation' not in st.session_state:
+                                            st.session_state[f'doc_analyzer_col{i}_{lang}_translation'] = translation
+                                        break
+
+                            if 'chk_sentiment' in st.session_state and st.session_state['chk_sentiment']:
+                                sentiment_analysis = generate_sentiment_analysis(text, llm)
+                                if 'doc_analyzer_sentiment_analysis' not in st.session_state:
+                                    st.session_state[f'doc_analyzer_col{i}_sentiment_analysis'] = sentiment_analysis
+
+                            if 'chk_keywords' in st.session_state and st.session_state['chk_keywords']:
+                                top_k = st.session_state['top_keywords'] or 10
+                                topic_labels = generate_topic_labels(text, llm, top_k=top_k)
+                                if 'doc_analyzer_topic_labels' not in st.session_state:
+                                    st.session_state[f'doc_analyzer_col{i}_topic_labels'] = topic_labels
+
+                    document_analysis = ''
+                    if newsroom  == NEWSROOM_HS:
+                        if 'num_experimental_max_docs' in st.session_state and st.session_state['num_experimental_max_docs'] > MAX_DOCS:
+                            summaries = []
+                            for text in texts:
+                                summaries.append(generate_focused_summarization(Q, text, llm, newsroom, doc_lang))
+                            texts = summaries
+                        document_analysis = generate_document_analysis_hs(Q, unique_titles, texts, llm, advanced_prompt, doc_lang)
+                    else:
+                        document_analysis = generate_document_analysis(Q, results_df, llm, advanced_prompt)
+
+                    # Translate the document analysis using the current user session's language of choice
+                    if doc_lang != 'No translation':
+                        document_analysis = generate_translation(document_analysis, doc_lang, llm)
+
+                    if 'doc_analyzer_docanalysis' not in st.session_state:
+                        st.session_state['doc_analyzer_docanalysis'] = document_analysis
+
                     st.rerun()
-
-                                    
-            if btn_ask and Q.strip() != '':
-                results = st.session_state['doc_analyzer_result']
-                # Inspect Results
-                data_dict = {
-                    'ids': results['ids'][0],
-                    'distances': results['distances'][0],
-                    'documents': results['documents'][0],
-                    'title': [eval(str(m))['title'] for m in results['metadatas'][0]],
-                    'url': [eval(str(m))['url'] for m in results['metadatas'][0]],
-                    'metadata': results['metadatas'][0]
-                }
-
-                results_df = pd.DataFrame(data_dict)
-                cols = st.columns(results_df['title'].nunique())
-                unique_titles = results_df['title'].unique()
-
-                texts = [] # for HS analysis using joined chunks
-                for i in range(len(cols)):
-                    with cols[i]:
-                        title = unique_titles[i]
-                        tmp_df = results_df[results_df['title'] == title]
-                        source = ''
-                        text = ''
-
-                        for x in range(tmp_df.shape[0]):
-                            source = f"Source: {tmp_df['url'].iloc[x]}"
-                            text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
-
-                        texts.append(text) # for HS analysis using joined chunks
-                        
-                document_analysis = ''
-                if newsroom  == "Helsingin Sanomat":
-                    if 'num_experimental_max_docs' in st.session_state and st.session_state['num_experimental_max_docs'] > 5:
-                        summaries = []
-                        for text in texts:
-                            summaries.append(generate_focused_summarization(Q, text, llm))
-                        texts = summaries
-                    document_analysis = generate_document_analysis_hs(Q, unique_titles, texts, llm, advanced_prompt)
-                else:
-                    document_analysis = generate_document_analysis(Q, results_df, llm, advanced_prompt)
-
-                # Translate the document analysis using the user's language of choice
-                document_analysis = generate_translation(document_analysis, doc_lang, llm)
-
-                if 'doc_analyzer_docanalysis' not in st.session_state:
-                    st.session_state['doc_analyzer_docanalysis'] = document_analysis
-
-                st.rerun()
 
             # Document Analyzer's feedback to be submitted and states has been updated
             if 'doc_analyzer_query' in st.session_state:
@@ -281,7 +306,7 @@ if options == "📚 Document Analysis":
                 with st.expander("Semantic Data Analysis:", expanded=True):
                     st.subheader('Query:')
                     st.write(Q)
-                    if 'expanded_queries' in st.session_state and len(st.session_state['expanded_queries']) > 0:
+                    if 'expanded_queries' in st.session_state:
                         st.subheader('Expanded queries:')
                         queries_str = ''
                         for query in st.session_state['expanded_queries'][:-1]:
@@ -296,7 +321,7 @@ if options == "📚 Document Analysis":
                     title_count_str = ''
                     for title, count in title_counts.items():
                         title_count_str += f"{title} (k={count})<br>"
-                        
+
                     st.write(f"""
                     {title_count_str}
                     """, unsafe_allow_html=True)
@@ -318,8 +343,8 @@ if options == "📚 Document Analysis":
                         for x in range(tmp_df.shape[0]):
                             source = f"Source: {tmp_df['url'].iloc[x]}"
                             text += '... ' + tmp_df['documents'].iloc[x] + '...\n\n'
-                            
-                        if newsroom  != "Helsingin Sanomat":
+
+                        if newsroom != NEWSROOM_HS:
                             st.header(title)
                             st.write(f"Document Result Index: {i}")
                             st.caption(f"Source: {results_df['url'].iloc[i]}")
