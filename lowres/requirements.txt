@@ -1,5 +1,6 @@
 pysqlite3-binary
 chromadb==0.4.24
+langchain==0.2.13
 langchain_community==0.2.12
 matplotlib==3.8.3
 openai==1.40.8
