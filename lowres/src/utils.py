@@ -1,6 +1,6 @@
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# __import__('pysqlite3')
+# import sys
+# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 #### Uncomment the code above in Production Environment
 #######################################################################################################
 
@@ -22,17 +22,19 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 
 from src.prompts import *
 
 # # Development Environment
-# load_dotenv()
-# OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
-# IS_PROD = False
+load_dotenv()
+OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
+IS_PROD = False
 
 # Production Environment
-OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
-IS_PROD = True
+# OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
+# IS_PROD = True
 
 PROJ_DIR = 'lowres/' if IS_PROD else ''
 EMBEDDING_MODEL = 'text-embedding-3-large'
@@ -92,6 +94,7 @@ SCROLL_BACK_TO_TOP_BTN = f"""
 </a>
 """
 
+NEWSROOM_HS = "Helsingin Sanomat"
 #######################################################################################################
 
 def get_openai_client():
@@ -110,6 +113,13 @@ def init_chroma_db(collection_name, db_path=DB_PATH):
     collection = chroma_client.get_or_create_collection(name=collection_name, embedding_function=embedding_function)
 
     return collection
+#######################################################################################################
+
+# Function to chunk the documents before upserting them
+def chunk_document(text, chunk_size=1000, chunk_overlap=100):
+    # Use a RecursiveCharacterTextSplitter for chunking
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    return text_splitter.split_text(text)
 #######################################################################################################
 
 def semantic_search(Q, k=K, collection=None,  titles=[]):
@@ -140,7 +150,7 @@ def semantic_search_separated_documents(Q, k=K, collection=None, titles=[]):
     for title in titles:
         title_results = collection.query(
             query_texts=[Q],
-            n_results=k, 
+            n_results=k,
             where={'title': title}
         )
         for key in results:
@@ -151,24 +161,24 @@ def semantic_search_separated_documents(Q, k=K, collection=None, titles=[]):
 
 def semantic_search_expanded(Q, expanded_queries, k=K, collection=None, titles=[], separate_documents=False, llm=None):
     expanded_queries.append(Q)
-    
+
     results = {
         'ids': [[]],
         'distances': [[]],
         'metadatas': [[]],
         'documents': [[]]
     }
-        
+
     for query in expanded_queries:
         if separate_documents:
             partial_results = semantic_search_separated_documents(query, k, collection, titles)
         else:
             partial_results = semantic_search(query, k, collection, titles)
-            
+
         for key in results:
             if key in partial_results and isinstance(results[key], list) and isinstance(partial_results[key], list):
                 results[key][0].extend(partial_results[key][0])
-                    
+
     # Remove duplicates from documents and corresponding metadata, distances, and ids
     seen_documents = set()
     unique_results = {
@@ -177,7 +187,7 @@ def semantic_search_expanded(Q, expanded_queries, k=K, collection=None, titles=[
         'metadatas': [[]],
         'documents': [[]]
     }
-    
+
     for i, doc in enumerate(results['documents'][0]):
         if doc not in seen_documents:
             seen_documents.add(doc)
@@ -188,38 +198,42 @@ def semantic_search_expanded(Q, expanded_queries, k=K, collection=None, titles=[
     return unique_results
 #######################################################################################################
 
-def upsert_documents_to_collection(collection, documents):
+def upsert_documents_to_collection(collection, documents, chunk_size=1000, chunk_overlap=100):
     # Every document needs an id for Chroma
     last_idx = len(collection.get()['ids'])
-    ids = list(f'id_{idx+last_idx:010d}' for idx, _ in enumerate(documents))
-    docs = list(map(lambda x: x.page_content, documents))
-    mets = list(map(lambda x: x.metadata, documents))
+    all_ids = []
+    all_documents = []
+    all_metadatas = []
 
-    # Update/Insert some text documents to the db collection
-    collection.upsert(ids=ids, documents=docs,  metadatas=mets)
+    for idx, doc in enumerate(documents):
+        # Split each document into chunks
+        chunks = chunk_document(doc.page_content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        
+        # Assign a unique ID to each chunk
+        ids = [f'id_{idx+last_idx:010d}_chunk_{i}' for i in range(len(chunks))]
+        
+        # Append chunked documents and their metadata
+        all_ids.extend(ids)
+        all_documents.extend(chunks)
+        all_metadatas.extend([doc.metadata] * len(chunks))  # Metadata is repeated for each chunk
+
+    # Upsert the chunked documents into the ChromaDB collection
+    collection.upsert(ids=all_ids, documents=all_documents, metadatas=all_metadatas)
 #######################################################################################################
 
-def expand_query(Q, nr_queries=4, llm=None, temperature=1):
+def expand_query(Q, newsroom, doc_lang, nr_queries=4, llm=None, temperature=1):
     task = 'Query Expansion'
-    prompt = f"""You are an AI language model assistant. Your task is to generate different versions of the given user question to retrieve relevant documents from a vector database. By generating multiple perspectives on the user question, your goal is to help the user overcome some of the limitations of the distance-based similarity search. Handle complex queries by splitting them into simpler, more focused sub-queries.
-
-    Instructions:
-
-    - Analyze this query delimited by backticks: ```{Q}```. Identify whether the query contains multiple components or aspects that can be logically separated.
-    
-    - Split Complex Queries: if the query is complex, break it down into distinct sub-queries. Each sub-query should focus on a specific aspect of the original query.
-    
-    - Perform Query Expansion: For each sub-query, generate {nr_queries} different expanded versions. These expanded versions should rephrase the sub-query using synonyms or alternative wording.
-    
-    - Output Format: Provide the expanded queries in a list format, with each query on a new line. Don't write any extra text except the queries, don't number the queries and don't divide the queries by empty lines.
-    
-    Answer in Finnish."""
+    prompt = QUERY_EXPANSION_PROMPT.replace('{{NR_QUERIES}}', str(nr_queries)).replace('{{Q}}', Q)
+    if newsroom == NEWSROOM_HS and doc_lang == 'No translation':
+        prompt = prompt.replace('{{LANGUAGE}}', 'Answer in Finnish.')
+    else:
+        prompt = prompt.replace('{{LANGUAGE}}', '')
     response = generate_response(task, prompt, llm, temperature)
     expanded_queries = response.split('\n')  # Assuming each variation is on a new line
     expanded_queries = [query.strip() for query in expanded_queries]
     filtered_queries = [s for s in expanded_queries if s and len(s) <= 500]
-    print(filtered_queries)
     return filtered_queries
+#######################################################################################################
 
 def generate_response(task, prompt, llm, temperature=0.):
     response = llm.chat.completions.create(
@@ -239,17 +253,15 @@ def generate_summarization(doc, llm):
     prompt = f"Summarize this document:\n\n{doc}"
     response = generate_response(task, prompt, llm)
     return response
+#######################################################################################################
 
-def generate_focused_summarization(Q, doc, llm):
+def generate_focused_summarization(Q, doc, llm, newsroom, doc_lang):
     task = 'Text Summarization'
-    prompt = f"""Make a summary of the document below with a focus on answering the following research question delimited by double quotes: "{Q}". 
-    Please extract and condense the key points and findings relevant to this question, highlighting any important data, conclusions, or implications. 
-    Justify your insights with evidence from the documents. Format your references as follows:
-    - Source: [Document Title]
-    - Excerpt: [Approximately 100 words from the document that supports your claim]
-    Answer in Finnish.
-    Here is the document to analyse delimited by three backticks:
-    ```{doc}```"""
+    prompt = FOCUSED_SUMMARIZATION_PROMPT.replace('{{QUESTION}}', Q).replace('{{DOCUMENT}}', doc)
+    if newsroom == NEWSROOM_HS and doc_lang == 'No translation':
+        prompt = prompt.replace('{{LANGUAGE}}', 'Answer in Finnish.')
+    else:
+        prompt = prompt.replace('{{LANGUAGE}}', '')
     response = generate_response(task, prompt, llm)
     return response
 #######################################################################################################
@@ -290,7 +302,7 @@ def generate_document_analysis(Q, df, llm, advanced_prompt):
     return response
 #######################################################################################################
 
-def generate_document_analysis_hs(Q, titles, texts, llm, advanced_prompt): # HS_ANALYSIS
+def generate_document_analysis_hs(Q, titles, texts, llm, advanced_prompt, doc_lang): # HS_ANALYSIS
     task = 'Document analysis and comparison'
     doc_input = 'Each document has a title and content and is delimited by triple backticks.'
     for i in range(len(titles)):
@@ -299,6 +311,8 @@ def generate_document_analysis_hs(Q, titles, texts, llm, advanced_prompt): # HS_
         """
 
     prompt = advanced_prompt.replace('{{QUESTION}}', Q).replace('{{DOCUMENTS}}', doc_input)
+    if doc_lang == 'No translation':
+        prompt = prompt.replace('{{LANGUAGE}}', 'Answer in Finnish.')
     response = generate_response(task, prompt, llm)
     return response
 #######################################################################################################
