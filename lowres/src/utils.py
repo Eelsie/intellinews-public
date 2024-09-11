@@ -32,7 +32,7 @@ from src.prompts import *
 #OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
 #IS_PROD = False
 
-Production Environment
+# Production Environment
 OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
 IS_PROD = True
 
