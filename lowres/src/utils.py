@@ -1,6 +1,6 @@
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 #### Uncomment the code above in Production Environment
 #######################################################################################################
 
@@ -28,13 +28,13 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from src.prompts import *
 
 # # Development Environment
-load_dotenv()
-OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
-IS_PROD = False
+#load_dotenv()
+#OPENAI_APIKEY = os.environ['OPENAI_APIKEY']
+#IS_PROD = False
 
-# Production Environment
-# OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
-# IS_PROD = True
+Production Environment
+OPENAI_APIKEY = st.secrets['OPENAI_APIKEY']
+IS_PROD = True
 
 PROJ_DIR = 'lowres/' if IS_PROD else ''
 EMBEDDING_MODEL = 'text-embedding-3-large'
